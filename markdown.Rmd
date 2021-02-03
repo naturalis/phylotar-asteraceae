@@ -1,0 +1,143 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+#Markdown for PhylotaR
+
+This is a way to make structured and reproducable documentation of all steps that are taken in the Asteraceae supermatrix.
+
+```{r cache=TRUE}
+load("Environment_2.RData")
+```
+
+##Installing PhylotaR
+
+The first step in the pipeline is downloading PhylotaR. Make sure that the latest version of R is installed on your pc. 
+
+```{r eval=FALSE}
+install.packages("devtools")
+install.packages("remotes")
+library(devtools)
+library(remotes)
+remotes::install_github('ropensci/phylotaR')
+library(phylotaR)
+```
+
+##Seting up PhylotaR
+
+Now we can start by setting up a working directory that contains certain parameters that are important for the analysis.
+
+```{r eval=FALSE}
+library(phylotaR)
+wd <- '[FILEPATH TO WORKING DIRECTORY]'
+ncbi_dr <- '[FILEPATH TO COMPILED BLAST+ TOOLS]'
+txid <- 4210  # Asteracea ID
+setup(wd = wd, txid = txid, ncbi_dr = ncbi_dr)
+```
+
+The Filepaths are of course different for each pc. In this case I have used the taxonomic ID of Asteraceae. But this can be altered. Use the taxonomic ID that is specified at [GenBank Taxonomy Browser](https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Root)
+
+Running PhylotaR is as simple as typing:
+
+```{r eval=FALSE}
+
+run(wd=wd)
+```
+
+##Interacting with the PhylotaR-object
+
+After this has run, whenever you are in the same working directory you can call the PhylotaR-object again by running:
+
+
+```{r eval=FALSE}
+phylota=read_phylota(wd)
+```
+
+This object is easy to handle in R. The steps I took to create files per cluster are the following:
+
+
+* **Create a new Phylota-object that has one sequence per taxon.**
+
+```{r eval=FALSE}
+phylota_sp <- drop_by_rank(phylota = phylota, rnk = 'species', n = 1)
+
+```
+
+
+* **Create a object (list) of cluster IDs. This is necessary to handle the object.**
+
+```{r eval=FALSE}
+cids=phylota_sp@cids
+```
+
+* **Create a new Phylota-object, but with excluding clusters that only contain a few taxa. Cut-off is flexible. A summary is a nice way to look what object you're left with.**
+
+```{r eval=FALSE}
+ntaxa=get_ntaxa(phylota = phylota_sp, cid = cids)#number of taxa per cluster
+keep=cids[ntaxa>50]#new set of cluster IDs with more than 50 taxa
+selected=drop_clstrs(phylota = phylota_sp, cid = keep)#new Phylota-object
+```
+```{r echo=FALSE}
+head(smmry_sel)
+```
+  
+
+
+
+##The loop that creates the final files per cluster.
+
+I download a program that makes handling strings easier, which is important for the output filename.
+
+```{r eval=FALSE}
+install.packages("tidyverse")
+library(tidyverse)
+```
+
+Then a new list of cluster IDs in this object is necessary.
+
+```{r eval=FALSE}
+cids_sel=selected@cids
+```
+
+And now the loop.
+
+```{r eval=FALSE}
+#A for loop that goes over the cluster IDs
+for (i in cids_sel){
+  txids <- get_txids(phylota = selected, cid = i, rnk = 'species')#makes a list of taxon-IDs for the specific cluster
+  
+# look up name for Taxon IDs per cluster and create a list out of it.
+scientific_names <- get_tx_slot(phylota = selected, txid = txids, slt_nm = 'scnm')
+
+#formatting the names
+scientific_names <- gsub('\\.', '', scientific_names)
+scientific_names <- gsub('\\s+', '_', scientific_names)
+
+#specify the sequence IDs per cluster
+  sids <- reduced@clstrs[[i]]@sids
+  
+  # write out (one file per cluster)
+  pad="C:/Users/Bart/Documents/MBI jaar 3/Stage/Data/Results/cluster"#general path to location
+  outfile= str_c(pad, i)#add the cluster ID to the filename
+  write_sqs(phylota = selected, sid = sids, sq_nm = scientific_names,
+            outfile = outfile)}
+```
+
+Now you have your files. Good luck!
+
+
+##New section: Creating a species list of the entire object.
+
+```{r eval=FALSE}
+txids=selected@txids #Extract all taxon IDs
+
+scientific_names <- get_tx_slot(phylota = selected, txid = txids, slt_nm = 'scnm') #Change IDs into scientific names
+
+scientific_names=as.data.frame(scientific_names) #Make it a dataframe
+
+write.csv(scientific_names, "C:/Users/Bart/Documents/MBI jaar 3/Stage/Data/phylotar-asteraceae/taxa.csv", row.names = T) #Write a csv-file from the dataframe.
+```
+ Now you also have a species list for further operartions. 
